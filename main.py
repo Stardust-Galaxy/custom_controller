@@ -8,8 +8,8 @@ from time import sleep
 
 addr = ('127.0.0.1', 1180)
 #头段	
-SOF = 0xa5
-data_length = 34 #data段长度
+SOF = 0xA5
+data_length = 30 #data段长度
 seq = 0x00 #包序号，每一次加一
 crc8 = 0x00 
 #命令字
@@ -18,9 +18,20 @@ cmd_id = 0x0302
 key_1 = 0xff
 key_2 = 0xff
 
+last_location_x = 0.0
+last_location_y = 0.0
+last_location_z = 0.0
+last_pitch = 0.0
+last_yaw = 0.0
+last_roll = 0.0
+
+
 location_x = 0.0
-location_y = 0.0
+location_y = 0.0 
 location_z = 0.0
+pitch = 0.0
+yaw = 0.0
+roll = 0.0
 end_float = float("inf")
 #尾校验
 crc16 = 0x00
@@ -78,23 +89,23 @@ if __name__ == '__main__':
 					#print(seq)
 					data = pose.get_pose_data()
 					w = data.rotation.w
-					x = data.rotation.x
-					y = data.rotation.y
-					z = data.rotation.z
-					
-					if GPIO.input(18):
-						location_x = data.translation.x
-						location_y = data.translation.y
-						location_z = data.translation.z
-					else:
-						location_y = 0
-						location_x = 0
-						location_z = 0
+					x = -data.rotation.z
+					y = data.rotation.x
+					z = -data.rotation.y
+					pitch = -math.asin(2.0 * (x*z - w*y)) * 180.0 / math.pi + 15.0
+					roll =  math.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / math.pi - 40.0
+					yaw = math.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / math.pi
+					print("pitch: ", pitch, "roll: ", roll, "yaw: ", yaw)
+					location_x = data.translation.x
+					location_y = data.translation.y
+					location_z = data.translation.z
+					print("x: ", location_x, "y: ", location_y, "z: ", location_z)
 					if GPIO.input(27):
 						key_1 = 0x00
 					else:
 						key_1 = 0xff
 					if GPIO.input(22):
+						print("data stabilized")
 						key_2 = 0x00
 					else:
 						key_2 = 0xff
@@ -106,7 +117,7 @@ if __name__ == '__main__':
 					head = struct.pack("<BHB",SOF, data_length, seq)
 					head = head + struct.pack("<B", 0x5F)
 					#buff = buff + struct.pack("<H", crc16_check(buff))
-					buff = head + struct.pack("<HBBfffffff", cmd_id, key_1, key_2, location_y, location_x, location_z, x, y, z, w, end_float)
+					buff = head + struct.pack("<HBBfffffff", cmd_id, key_1, key_2, location_y, location_x, location_z, pitch,yaw,roll, end_float)
 					buff = buff + struct.pack("<H", 0x5FFF)
 					#buff = buff + struct.pack("<H", crc16_check(buff))
 					#print(location_x, location_y, location_z, roll, pitch, yaw)
