@@ -30,9 +30,9 @@ crc16 = 0x00
 if __name__ == '__main__':
     s = socket(AF_INET,SOCK_DGRAM)
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(17,GPIO.IN,pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(17,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(18,GPIO.IN,pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(27,GPIO.IN,pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(27,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(22,GPIO.IN,pull_up_down=GPIO.PUD_UP)
     GPIO.setup(4,GPIO.OUT)
     led_state = False
@@ -84,32 +84,35 @@ if __name__ == '__main__':
                     z = data.rotation.z
                     q = Quaternion(w,x,y,z)
                     euler = q.yaw_pitch_roll
-                    pitch = euler[1]
+                    pitch = -euler[1] + math.pi / 2
                     yaw = euler[0]
-                    roll = euler[2]
+                    roll = euler[2] - 1.57
                     print("pitch: ", pitch * 180 / math.pi, "roll: ", roll * 180 / math.pi, "yaw: ", yaw * 180 / math.pi)
-                    location_x = 1000 * data.translation.z
-                    location_y = 1000 * data.translation.x
+                    location_x = -1000 * data.translation.z
+                    location_y = -1000 * data.translation.x
                     location_z = 1000 * data.translation.y
                     print("x: ", location_x, "y: ", location_y, "z: ", location_z)
-                    if GPIO.input(27):
+                    data_valid = location_z > 0 and location_z < 485 and location_y > 0  and pitch > 0 and pitch < math.pi and yaw > -math.pi and yaw < math.pi and math.sqrt(x**2 + y**2)< 460
+                    if  GPIO.input(17):
+                        key_1 = 0x01
+                    else:
                         key_1 = 0x00
-                    else:
-                        key_1 = 0xff
-                    if not GPIO.input(22):
+                    if not GPIO.input(22) and data_valid:
                         print("data stabilized")
-                        key_2 = 0x00
+                        key_2 = 0x01
                     else:
-                        key_2 = 0xff
+                        key_2 = 0x00
                     seq += 1
                     if seq > 255:
                         seq = 0
                     head = struct.pack("<BHB", SOF, data_length, seq)
                     head = head + struct.pack("<B",0x5F) #place_holder for crc8
-                    buff = head + struct.pack("<HBBfffffff", cmd_id, key_1, key_2, location_x, location_y, location_z, pitch, yaw, roll, end_float)
+                    buff = head + struct.pack("<HBBfffffff", cmd_id, key_2, key_1, location_x, location_y, location_z, pitch, roll, yaw, end_float)
                     buff = buff + struct.pack("<H", 0x5FFF) #place_holder for crc16
-                    print(buff)
-                    s.sendto(buff,addr)
+                    #l = [hex(int(i)) for i in buff]
+                    #print(" ".join(l))
+                    if data_valid:
+                        s.sendto(buff,addr)
                     sleep(0.04)
             except KeyboardInterrupt:
                 GPIO.output(4,False)
