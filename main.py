@@ -7,6 +7,18 @@ from time import sleep
 from pyquaternion import Quaternion
 addr = ('127.0.0.1',1180)
 
+class LowPassFilter:
+    def __init__(self, alpha):
+        self.alpha = alpha
+        self.value = None
+
+    def update(self, value):
+        if self.value is None:
+            self.value = value
+        else:
+            self.value = self.alpha * value + (1 - self.alpha) * self.value
+        return self.value
+
 SOF = 0xA5
 data_length = 30
 seq = 0x00
@@ -35,6 +47,13 @@ if __name__ == '__main__':
     GPIO.setup(27,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(22,GPIO.IN,pull_up_down=GPIO.PUD_UP)
     GPIO.setup(4,GPIO.OUT)
+    location_x_filter = LowPassFilter(alpha=0.2)
+    location_y_filter = LowPassFilter(alpha=0.2)
+    location_z_filter = LowPassFilter(alpha=0.2)
+    pitch_filter = LowPassFilter(alpha=0.2)
+    yaw_filter = LowPassFilter(alpha=0.2)
+    roll_filter = LowPassFilter(alpha=0.2)
+
     led_state = False
     led_toggle = 5
     GPIO.output(4,led_state)
@@ -97,6 +116,11 @@ if __name__ == '__main__':
                         key_1 = 0x01
                     else:
                         key_1 = 0x00
+                    if  GPIO.input(18):
+                        if GPIO.input(17):
+                            key_1 = 0x03
+                        else:
+                            pass
                     if not GPIO.input(22) and data_valid:
                         print("data stabilized")
                         key_2 = 0x01
@@ -105,6 +129,12 @@ if __name__ == '__main__':
                     seq += 1
                     if seq > 255:
                         seq = 0
+                    pitch = pitch_filter.update(pitch)
+                    yaw = yaw_filter.update(yaw)
+                    roll = roll_filter.update(roll)
+                    location_x = location_x_filter.update(location_x)
+                    location_y = location_y_filter.update(location_y)
+                    location_z = location_z_filter.update(location_z)
                     head = struct.pack("<BHB", SOF, data_length, seq)
                     head = head + struct.pack("<B",0x5F) #place_holder for crc8
                     buff = head + struct.pack("<HBBfffffff", cmd_id, key_2, key_1, location_x, location_y, location_z, pitch, roll, yaw, end_float)
