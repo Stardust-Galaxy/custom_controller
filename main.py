@@ -42,9 +42,9 @@ crc16 = 0x00
 if __name__ == '__main__':
     s = socket(AF_INET,SOCK_DGRAM)
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(17,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(17,GPIO.IN,pull_up_down=GPIO.PUD_UP)
     GPIO.setup(18,GPIO.IN,pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(27,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(27,GPIO.IN,pull_up_down=GPIO.PUD_UP)
     GPIO.setup(22,GPIO.IN,pull_up_down=GPIO.PUD_UP)
     GPIO.setup(4,GPIO.OUT)
     location_x_filter = LowPassFilter(alpha=0.2)
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     while(True):
         while(True):
             try:
-                if GPIO.input(27):
+                if not GPIO.input(27):
                     break
                 else:
                     sleep(0.25)
@@ -70,7 +70,7 @@ if __name__ == '__main__':
             except KeyboardInterrupt:
                 exit()
         try:
-            print("Key 17 pressed!")
+            print("Key27 pressed!")
             pipe = rs.pipeline()
             cfg = rs.config()
             cfg.enable_stream(rs.stream.pose)
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         except:
             print("T265 offline!")
             continue
-        while GPIO.input(27):
+        while not GPIO.input(27):
             try:
                 try:
                     frames = pipe.wait_for_frames()
@@ -104,28 +104,33 @@ if __name__ == '__main__':
                     q = Quaternion(w,x,y,z)
                     euler = q.yaw_pitch_roll
                     pitch = -euler[1] + math.pi / 2
-                    yaw = euler[0]
-                    roll = euler[2] - 1.57
+                    yaw = -euler[0]
+                    roll = euler[2] - math.pi / 2
                     print("pitch: ", pitch * 180 / math.pi, "roll: ", roll * 180 / math.pi, "yaw: ", yaw * 180 / math.pi)
-                    location_x = -1000 * data.translation.z
-                    location_y = -1000 * data.translation.x
-                    location_z = 1000 * data.translation.y
+                    #amplify coordinates
+                    location_x = -1200 * data.translation.z
+                    location_y = -1200 * data.translation.x
+                    location_z = 1200 * data.translation.y
                     print("x: ", location_x, "y: ", location_y, "z: ", location_z)
                     data_valid = location_z > 0 and location_z < 485 and location_y > 0  and pitch > 0 and pitch < math.pi and yaw > -math.pi and yaw < math.pi and math.sqrt(x**2 + y**2)< 460
-                    if  GPIO.input(17):
+                    if  not GPIO.input(17):
+                        print("pump start")
                         key_1 = 0x01
                     else:
                         key_1 = 0x00
-                    if  GPIO.input(18):
-                        if GPIO.input(17):
-                            key_1 = 0x03
-                        else:
-                            pass
+                    #key_2 only enablied when data valid
                     if not GPIO.input(22) and data_valid:
+                        led_toggle = 2
                         print("data stabilized")
                         key_2 = 0x01
                     else:
                         key_2 = 0x00
+                    if not GPIO.input(18):
+                        if not GPIO.input(22) and data_valid:
+                            print("z enabled")
+                            key_2 = 0x03
+                        else:
+                            pass
                     seq += 1
                     if seq > 255:
                         seq = 0
@@ -139,10 +144,9 @@ if __name__ == '__main__':
                     head = head + struct.pack("<B",0x5F) #place_holder for crc8
                     buff = head + struct.pack("<HBBfffffff", cmd_id, key_2, key_1, location_x, location_y, location_z, pitch, roll, yaw, end_float)
                     buff = buff + struct.pack("<H", 0x5FFF) #place_holder for crc16
-                    #l = [hex(int(i)) for i in buff]
-                    #print(" ".join(l))
-                    if data_valid:
-                        s.sendto(buff,addr)
+                    l = [hex(int(i)) for i in buff]
+                    print(" ".join(l))
+                    s.sendto(buff,addr)
                     sleep(0.04)
             except KeyboardInterrupt:
                 GPIO.output(4,False)

@@ -1,3 +1,4 @@
+#!/bin/bash
 sudo uhubctl -l 2 -a cycle -p 1-4
 sleep 5
 sudo chmod 777 /dev/ttyUSB0
