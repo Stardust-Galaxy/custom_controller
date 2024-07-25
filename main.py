@@ -7,6 +7,12 @@ from time import sleep
 from pyquaternion import Quaternion
 addr = ('127.0.0.1',1180)
 
+pump_button = 22
+enable_button = 27
+z_enable_button = 17
+reset_button = 18
+
+
 class LowPassFilter:
     def __init__(self, alpha):
         self.alpha = alpha
@@ -57,10 +63,12 @@ if __name__ == '__main__':
     led_state = False
     led_toggle = 5
     GPIO.output(4,led_state)
+    reset_state = GPIO.input(reset_button)
     while(True):
         while(True):
             try:
-                if GPIO.input(27):
+                if GPIO.input(reset_button) != reset_state:
+                    reset_state = GPIO.input(reset_button)
                     break
                 else:
                     sleep(0.25)
@@ -78,7 +86,10 @@ if __name__ == '__main__':
         except:
             print("T265 offline!")
             continue
-        while GPIO.input(27):
+        while True:
+            if GPIO.input(reset_button) != reset_state:
+                reset_state = GPIO.input(reset_button)
+                break
             try:
                 try:
                     frames = pipe.wait_for_frames()
@@ -107,21 +118,20 @@ if __name__ == '__main__':
                     yaw = euler[0]
                     roll = euler[2] - 1.57
                     print("pitch: ", pitch * 180 / math.pi, "roll: ", roll * 180 / math.pi, "yaw: ", yaw * 180 / math.pi)
-                    location_x = -1000 * data.translation.z
-                    location_y = -1000 * data.translation.x
+                    location_x = -1800 * data.translation.z
+                    location_y = -1800 * data.translation.x
                     location_z = 1000 * data.translation.y
                     print("x: ", location_x, "y: ", location_y, "z: ", location_z)
                     data_valid = location_z > 0 and location_z < 485 and location_y > 0  and pitch > 0 and pitch < math.pi and yaw > -math.pi and yaw < math.pi and math.sqrt(x**2 + y**2)< 460
-                    if  GPIO.input(17):
+                    if  GPIO.input(pump_button):
                         key_1 = 0x01
                     else:
                         key_1 = 0x00
-                    if  GPIO.input(18):
-                        if GPIO.input(17):
-                            key_1 = 0x03
-                        else:
-                            pass
-                    if not GPIO.input(22) and data_valid:
+                    if  GPIO.input(z_enable_button):
+                        key_2 = 0x02
+                    else:
+                        pass
+                    if not GPIO.input(enable_button) and data_valid:
                         print("data stabilized")
                         key_2 = 0x01
                     else:
